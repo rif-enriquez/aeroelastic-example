@@ -136,9 +136,9 @@ def anastruct_cantilever_beam(x, y, w, E, I):
     # ss.show_shear_force()
     # ss.show_reaction_force()
     # xp, yp = ss.show_displacement(factor=1, scale=1, values_only=False)
-     pdb.set_trace()
+    
     # output uy, moment, slope, ux
-    return np.array(uy), 0, np.array(ux)
+    return np.array(uy), np.array(ux)
     
 def calculate_spanwise(x, dy):
     dx = np.zeros_like(x)
@@ -169,13 +169,13 @@ def interpolate_aero_to_structural(Xa, Fz, Xs):
 
     return Fz_interpolated
 
-   
 ########################
 # Main start
 # Read surface section loads output from FSI
 # output columns: Offset, Chord, X_QC, Z_QC, Fx, Fz, Moment
 aero_df = read_surfacesection_loads('FS_SurfaceSection_Loads.txt') 
-struct_df = read_struct_points('Structural_nodes_refined.txt')
+structural_nodes_file = 'Structural_nodes.txt'
+struct_df = read_struct_points('Structural_nodes.txt')
 # with multiple csys defined, the offset goes to 0, so I had to add this line to define Y
 if np.average(aero_df.Y) < 0.1:
     aero_df.Y = np.linspace(0, struct_df.Y.iloc[-1], len(aero_df.Y)) 
@@ -219,9 +219,10 @@ rad = struct_df.X - struct_acx
 aero_moment = rad * struct_fz 
 
 # Calculate beam deflections
-delta_z, M, na  = anastruct_cantilever_beam(struct_df.Y,  struct_df.Z, struct_fz, E, I)
-delta_x, Mx, na = anastruct_cantilever_beam(struct_df.Y,  struct_df.X, struct_fx, E2, I2) # edgewise bending
-theta, T = cantilever_torsion(struct_df.Y, aero_moment + struct_my, G, J)
+delta_z, _  = anastruct_cantilever_beam(struct_df.Y,  struct_df.Z, struct_fz, E, I)
+delta_x, _ = anastruct_cantilever_beam(struct_df.Y,  struct_df.X, struct_fx, E2, I2) # edgewise bending
+if '2D' in structural_nodes_file:
+    theta = cantilever_torsion(struct_df.Y, aero_moment + struct_my, G, J)
 
 # calculate spanwise beam deflection due to large bending angle
 # psi = np.arcsin(delta_z / struct_df.Y)
