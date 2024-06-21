@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "X:\FlightStream\Code Testing\FlightStream_installation_2024_2_Ticket_144\gt-validation\beam_code_distributed.py", line 224, in <module>
+    theta, T = calculate_beam_deflection(struct_df.Y, aero_moment + struct_my, G, J)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'calculate_beam_deflection' is not defined
