@@ -1,4 +1,4 @@
-import pdb
+import pdb, argparse
 import numpy as np
 from scipy.integrate import cumtrapz
 import pandas as pd
@@ -169,88 +169,98 @@ def interpolate_aero_to_structural(Xa, Fz, Xs):
 
     return Fz_interpolated
 
-########################
-# Main start
-# Read surface section loads output from FSI
-# output columns: Offset, Chord, X_QC, Z_QC, Fx, Fz, Moment
-aero_df = read_surfacesection_loads('FS_SurfaceSection_Loads.txt') 
-structural_nodes_file = 'Structural_nodes.txt'
-struct_df = read_struct_points('Structural_nodes.txt')
-# with multiple csys defined, the offset goes to 0, so I had to add this line to define Y
-if np.average(aero_df.Y) < 0.1:
-    aero_df.Y = np.linspace(0, struct_df.Y.iloc[-1], len(aero_df.Y)) 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Aeroelastic example runner')
+    parser.add_argument('--structural_nodes_file', type=str, default='Structural_nodes.txt',
+                        help='File with structural nodes information')
+    return parser.parse_args()
 
-# Read previous displacement and apply to the structural mesh
-# Count existing FSIDisp files
-existing_files_count = len(glob.glob('FSIDisp_*.txt'))
-if existing_files_count > 0:
-    last_file = f'FSIDisp_{existing_files_count}.txt'
-    struct_delta = read_displacement_points(last_file)
+if __name__ == "__main__":
+    args = parse_args()
 
-    if existing_files_count > 2:
-        # averaging last 2 files helps convergence
-        last_file = f'FSIDisp_{existing_files_count-1}.txt'
-        struct_delta2 = read_displacement_points(last_file)
-        struct_delta.dx = (struct_delta.dx + struct_delta2.dx) /2
-        struct_delta.dy = (struct_delta.dy + struct_delta2.dy) /2
-        struct_delta.dz = (struct_delta.dz + struct_delta2.dz) /2
-    struct_df.X = struct_df.X + struct_delta.dx
-    struct_df.Y = struct_df.Y + struct_delta.dy
-    struct_df.Z = struct_df.Z + struct_delta.dz 
+    ########################
+    # Read surface section loads output from FSI
+    # output columns: Offset, Chord, X_QC, Z_QC, Fx, Fz, Moment
+    aero_df = read_surfacesection_loads('FS_SurfaceSection_Loads.txt') 
+    structural_nodes_file = args.structural_nodes_file
+    struct_df = read_struct_points(structural_nodes_file)
+    
+    # with multiple csys defined, the offset goes to 0, so I had to add this line to define Y
+    if np.average(aero_df.Y) < 0.1:
+        aero_df.Y = np.linspace(0, struct_df.Y.iloc[-1], len(aero_df.Y)) 
 
+    # Read previous displacement and apply to the structural mesh
+    # Count existing FSIDisp files
+    existing_files_count = len(glob.glob('FSIDisp_*.txt'))
+    if existing_files_count > 0:
+        last_file = f'FSIDisp_{existing_files_count}.txt'
+        struct_delta = read_displacement_points(last_file)
 
-# Example usage
-I = 1  # Moment of Inertia, m^4
-J = 1 # torsion moment
-E = 2.e4  # Modulus of Elasticity, Pa; replaced with E*I (bending rigidity - N*m2)
-G = 1.e4 # modulus of rigidity; replaced with G*J (torsional rigidity  - N*m2)
-E2 = 5.e6 # Edgewise bending rigidity
-I2 = 1.
-# Example load distribution (x in meters, w in Newtons/meter)
-aero_df.X.iloc[-1] = aero_df.X.iloc[-2] # hardcode the aero center of the last point
+        if existing_files_count > 2:
+            # averaging last 2 deflection files helps FSI convergence
+            last_file = f'FSIDisp_{existing_files_count-1}.txt'
+            struct_delta2 = read_displacement_points(last_file)
+            struct_delta.dx = (struct_delta.dx + struct_delta2.dx) /2
+            struct_delta.dy = (struct_delta.dy + struct_delta2.dy) /2
+            struct_delta.dz = (struct_delta.dz + struct_delta2.dz) /2
 
-struct_fz = interpolate_aero_to_structural( aero_df.Y, aero_df.Fz, struct_df.Y) 
-struct_fx = interpolate_aero_to_structural( aero_df.Y, aero_df.Fx, struct_df.Y)
-struct_my = interpolate_aero_to_structural( aero_df.Y, aero_df.My, struct_df.Y)
-struct_acx = interpolate_aero_to_structural(aero_df.Y, aero_df.X, struct_df.Y) # get nearest aero X location to structural node
-
-# aero moment caused by lift around elastic axis
-rad = struct_df.X - struct_acx 
-aero_moment = rad * struct_fz 
-
-# Calculate beam deflections
-delta_z, _  = anastruct_cantilever_beam(struct_df.Y,  struct_df.Z, struct_fz, E, I)
-delta_x, _ = anastruct_cantilever_beam(struct_df.Y,  struct_df.X, struct_fx, E2, I2) # edgewise bending
-if '2D' in structural_nodes_file:
-    theta = cantilever_torsion(struct_df.Y, aero_moment + struct_my, G, J)
-
-# calculate spanwise beam deflection due to large bending angle
-# psi = np.arcsin(delta_z / struct_df.Y)
-# yp = struct_df.Y * np.cos(psi) # projection of beam deflection on y-axis
-# delta_y = -1*(struct_df.Y - yp ) # the difference should be subtracted from the final deflection
-# delta_y = delta_y.fillna(0)
-# alternate method that preservers arc length
-delta_y = calculate_spanwise(struct_df.Y, delta_z)
-
-# Write beam displacements and dt values to output file
-with open('FSIDisp.txt', 'w') as file:
-    for dx, dy, dz in zip(delta_x, delta_y, delta_z):
-        file.write(f"{dx} {dy} {dz}\n")
-
-##### Write out file history
-# Create a copy with an index
-new_filename = f'FSIDisp_{existing_files_count + 1}.txt'
-os.system(f'copy FSIDisp.txt {new_filename}')
+        struct_df.X = struct_df.X + struct_delta.dx
+        struct_df.Y = struct_df.Y + struct_delta.dy
+        struct_df.Z = struct_df.Z + struct_delta.dz 
 
 
-# Count existing AeroLoad files
-existing_files_count = len(glob.glob('AeroLoad_*.txt'))
+    # Example usage
+    I = 1  # Moment of Inertia, m^4
+    J = 1 # torsion moment
+    E = 2.e4  # Modulus of Elasticity, Pa; replaced with E*I (bending rigidity - N*m2)
+    G = 1.e4 # modulus of rigidity; replaced with G*J (torsional rigidity  - N*m2)
+    E2 = 5.e6 # Edgewise bending rigidity
+    I2 = 1.
+    # Example load distribution (x in meters, w in Newtons/meter)
+    aero_df.X.iloc[-1] = aero_df.X.iloc[-2] # hardcode the aero center of the last point
 
-# Write Y and Fz columns to AeroLoad.txt
-with open('AeroLoad.txt', 'w') as file:
-    for y, fz in zip(struct_df.Y, struct_fz):
-        file.write(f"{y} {fz}\n")
+    struct_fz = interpolate_aero_to_structural( aero_df.Y, aero_df.Fz, struct_df.Y) 
+    struct_fx = interpolate_aero_to_structural( aero_df.Y, aero_df.Fx, struct_df.Y)
+    struct_my = interpolate_aero_to_structural( aero_df.Y, aero_df.My, struct_df.Y)
+    struct_acx = interpolate_aero_to_structural(aero_df.Y, aero_df.X, struct_df.Y) # get nearest aero X location to structural node
 
-# Create a copy with an index
-new_filename = f'AeroLoad_{existing_files_count + 1}.txt'
-os.system(f'copy AeroLoad.txt {new_filename}')
+    # aero moment caused by lift around elastic axis
+    rad = struct_df.X - struct_acx 
+    aero_moment = rad * struct_fz 
+
+    # Calculate beam deflections
+    delta_z, _  = anastruct_cantilever_beam(struct_df.Y,  struct_df.Z, struct_fz, E, I)
+    delta_x, _ = anastruct_cantilever_beam(struct_df.Y,  struct_df.X, struct_fx, E2, I2) # edgewise bending
+    if '2D' in structural_nodes_file:
+        theta = cantilever_torsion(struct_df.Y, aero_moment + struct_my, G, J)
+
+    # calculate spanwise beam deflection due to large bending angle
+    # psi = np.arcsin(delta_z / struct_df.Y)
+    # yp = struct_df.Y * np.cos(psi) # projection of beam deflection on y-axis
+    # delta_y = -1*(struct_df.Y - yp ) # the difference should be subtracted from the final deflection
+    # delta_y = delta_y.fillna(0)
+    # alternate method that preservers arc length
+    delta_y = calculate_spanwise(struct_df.Y, delta_z)
+
+    # Write beam displacements and dt values to output file
+    with open('FSIDisp.txt', 'w') as file:
+        for dx, dy, dz in zip(delta_x, delta_y, delta_z):
+            file.write(f"{dx} {dy} {dz}\n")
+
+    ##### Write out file history
+    # Create a copy with an index
+    new_filename = f'FSIDisp_{existing_files_count + 1}.txt'
+    os.system(f'copy FSIDisp.txt {new_filename}')
+
+
+    # Count existing AeroLoad files
+    existing_files_count = len(glob.glob('AeroLoad_*.txt'))
+
+    # Write Y and Fz columns to AeroLoad.txt
+    with open('AeroLoad.txt', 'w') as file:
+        for y, fz in zip(struct_df.Y, struct_fz):
+            file.write(f"{y} {fz}\n")
+
+    # Create a copy with an index
+    new_filename = f'AeroLoad_{existing_files_count + 1}.txt'
+    os.system(f'copy AeroLoad.txt {new_filename}')

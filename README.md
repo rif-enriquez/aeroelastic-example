@@ -15,11 +15,11 @@ wing.csv - Component Cross Sections file containing the cross sections and mesh 
 1. Ensure you have the latest version of FlightStream installed.
 2. Install the requirements.txt file in your python environment: `pip install requirements.txt`
 3. Open the Aeroelastic toolbox in FlightStream and set the runtime folder to this environment.
-4. Set the runtime command to: `python beam_code_distributed.py` add the optional argument `2D` if running the plate problem.
+4. Set the runtime command to: `python beam_code_distributed.py` add the optional argument to the structural nodes file. e.g. `Structural_nodes.txt` or `Structural_nodes.2D.txt`
 
 ## Running
 
-To run the aeroelastic problem, open the Aeroelastic toolbox.
+To run the aeroelastic problem, open the Aeroelastic toolbox in FlightStream.
 
 1. Ensure all boundaries are selected.
 2. Import the structural nodes file either `Structural_nodes.txt` (1D Beam) or `Structural_nodes_2D.txt` (2D Plate).
