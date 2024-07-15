@@ -26,6 +26,11 @@ To run the aeroelastic problem, open the Aeroelastic toolbox in FlightStream.
 3. Initialize the solver with Mirror boundary conditions.
 4. Run the aeroelastic problem.
 
+## IMPORTANT
+Anastruct will have to be manually edited to run with numpy versions >= 2.0
+file - anastruct\fem\system_components\assembly.py
+line 262 - np.NaN must change to np.nan
+
 ## Authors
 
 Daniel Enriquez - denriquez@altair.com - Altair
