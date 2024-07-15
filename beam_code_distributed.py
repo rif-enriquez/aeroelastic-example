@@ -1,6 +1,5 @@
 import pdb, argparse
 import numpy as np
-from scipy.integrate import cumtrapz
 import pandas as pd
 from io import StringIO
 from scipy.interpolate import interp1d
@@ -183,8 +182,8 @@ def interpolate_aero_to_structural(Xa, Fz, Xs):
     # Use this function to find loads at structural node points
     Fz_interpolated = interp_func(Xs)
 
-    Fz_total = np.trapz(Fz, Xa)
-    Fz_int_total = np.trapz(Fz_interpolated, Xs)
+    Fz_total = np.trapezoid(Fz, Xa)
+    Fz_int_total = np.trapezoid(Fz_interpolated, Xs)
     dfz = Fz_int_total - Fz_total
     ddfz =  dfz / len(Xs) * np.ones(len(Xs))
     Fz_interpolated = Fz_interpolated - ddfz # knockdown to ensure conservation of force
