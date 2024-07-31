@@ -2,13 +2,13 @@
 # pip install -r requirements.txt
 
 # numpy
-numpy==*
+numpy>=2.0.0
 
 # pandas
-pandas==*
+pandas>=2.0.0
 
 # scipy
-scipy==*
+scipy>=1.0.0
 
 # anastruct
-anastruct==*
+anastruct>=1.0.0
